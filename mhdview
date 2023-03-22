@@ -19,13 +19,14 @@ import hradiobutton
 @click.option('-c', '--cmap', default='', is_flag=False, flag_value='jet', help='foreground colormap')
 @click.option('-x', '--axis', 'default_axis', type=click.Choice(mhdtools.plans), default='axial', help='default axis')
 @click.option('-d', '--depth', 'default_depth', type=int, default=0, help='default depth')
+@click.option('-N', '--lnormalise', default=False, is_flag=True, help='normalise foreground data for current layer')
 @click.option('-n', '--normalise', default=False, is_flag=True, help='normalise foreground data')
 @click.option('-t', '--threshold', type=int, default=0, help='threshold (%) for colormap')
 @click.option('-D', 'step', type=int, default=1, help='resolution stepping')
 @click.argument('mhd', nargs=1, type=click.Path(exists=True))
 def main(
 	mhd: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
-	normalise: bool, threshold: int, step: int
+	lnormalise: bool, normalise: bool, threshold: int, step: int
 ):
 	"""mhd/raw file viewer
 
@@ -36,6 +37,9 @@ def main(
 	with colour         mhdview file.mhd -c
 	with threshold (%)  mhdview -c -t2 file.mhd
 	"""
+
+	if lnormalise and normalise:
+		raise click.BadParameter('either -n or -N but not both')
 
 	def worker_load(mhd, ret):
 		ret['raw'], ret['spacing'] = mhdtools.load_data(mhd)
@@ -80,6 +84,10 @@ def main(
 	raw, spacing  = fg['raw'], fg['spacing']
 	background    = bg['raw'] if 'raw' in bg else None
 
+	gmax = np.max(raw)
+	if colorbar is not None and normalise:
+		colorbar.ax.set_title(f"% of\n{gmax:.2e}")
+
 	# UI
 	ax_depth = fig.add_axes([0.2, 0.0, 0.65, 0.05])
 	slider_x = mpl.widgets.Slider(
@@ -105,7 +113,6 @@ def main(
 
 		plan = mhdtools.raw_plan(raw, axis)
 		if step != 1:
-			print(f"HELLO {step}")
 			plan = plan[:, ::step, ::step]
 
 		if background is not None:
@@ -129,18 +136,22 @@ def main(
 			ax.imshow(bg_plan[x], cmap='gray', extent=extent)
 
 		data = plan[x]
-		abs_max = np.max(data)
-		if normalise and abs_max != 0:
-			data /= abs_max
+		lmax = np.max(data)
 
-		ax.imshow(data, cmap=cmap, extent=extent, alpha=alpha)
+		norm = None
+		if lnormalise:
+			norm = mpl.colors.Normalize(0, lmax)
+		if normalise:
+			norm = mpl.colors.Normalize(0, gmax)
+
+		ax.imshow(data, norm=norm, cmap=cmap, extent=extent, alpha=alpha)
 
 		if colorbar is not None:
-			if not normalise:
-				cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, abs_max), cmap=cmap)
+			if lnormalise:
+				colorbar.ax.set_title(f"% of {lmax:.2e}")
+			elif not normalise:
+				cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, lmax), cmap=cmap)
 				colorbar.update_normal(cmappable)
-			else:
-				colorbar.ax.set_title(f"% of {abs_max:.2e}")
 
 	slider_x.on_changed(update)
 	select_plan_btn.on_clicked(select_plan)

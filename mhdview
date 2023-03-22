@@ -10,6 +10,10 @@ import mhdtools
 import hradiobutton
 
 
+def format_cursor_data(v):
+	return f"{v:.4e}"
+
+
 @click.command()
 @click.option(
 	'-b', '--background', 'background_mhd', type=click.Path(exists=True), default='.',
@@ -188,7 +192,8 @@ def main(
 		elif clamp is not None:
 			norm = mpl.colors.Normalize(clamp[0], clamp[1])
 
-		ax.imshow(data, norm=norm, cmap=cmap, extent=extent, alpha=alpha)
+		img = ax.imshow(data, norm=norm, cmap=cmap, extent=extent, alpha=alpha)
+		img.format_cursor_data = format_cursor_data
 
 		if colorbar is not None:
 			if lnormalise:

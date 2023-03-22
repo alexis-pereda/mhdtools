@@ -27,10 +27,14 @@ import hradiobutton
 )
 @click.option('-t', '--threshold', type=int, default=0, help='threshold (%) for colormap')
 @click.option('-D', 'step', type=int, default=1, help='resolution stepping')
-@click.argument('mhd', nargs=1, type=click.Path(exists=True))
+@click.option(
+	'-o', '--operation', type=click.Choice(('', 'sum', 'subtract')), default='',
+	help='operation to apply on the data'
+)
+@click.argument('mhd_files', nargs=-1, type=click.Path(exists=True))
 def main(
-	mhd: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
-	user_max: float, lnormalise: bool, normalise: bool, threshold: int, step: int
+	mhd_files: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
+	user_max: float, lnormalise: bool, normalise: bool, threshold: int, step: int, operation: str
 ):
 	"""mhd/raw file viewer
 
@@ -41,6 +45,11 @@ def main(
 	with colour         mhdview file.mhd -c
 	with threshold (%)  mhdview -c -t2 file.mhd
 	"""
+
+	if len(mhd_files) == 0:
+		raise click.MissingParameter('at least one mhd file is required')
+	elif len(mhd_files) > 1 and operation == '':
+		raise click.BadParameter('multiple mhd files but no operation specified')
 
 	nopts = 0
 	nopts = nopts + (1 if lnormalise else 0)
@@ -54,8 +63,9 @@ def main(
 
 	workers = []
 
-	fg = {}
-	workers.append(threading.Thread(target=worker_load, args=(mhd, fg)))
+	fgs = [{} for mhd in mhd_files]
+	for mhd, fg in zip(mhd_files, fgs):
+		workers.append(threading.Thread(target=worker_load, args=(mhd, fg)))
 
 	bg = {}
 	if background_mhd != '.':
@@ -89,7 +99,16 @@ def main(
 	for worker in workers:
 		worker.join()
 
-	raw, spacing  = fg['raw'], fg['spacing']
+	raw, spacing = None, None
+	if len(mhd_files) == 1:
+		raw, spacing  = fgs[0]['raw'], fgs[0]['spacing']
+	else:
+		spacing = fgs[0]['spacing']
+		if operation == 'sum':
+			raw = np.array(sum([fg['raw'] for fg in fgs]))
+		elif operation == 'subtract':
+			raw = fgs[0]['raw'] - np.array(sum([fg['raw'] for fg in fgs[1:]]))
+
 	background    = bg['raw'] if 'raw' in bg else None
 
 	gmax = np.max(raw)

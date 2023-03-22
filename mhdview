@@ -81,6 +81,11 @@ def main(
 	ax.set_xlabel('(mm)')
 	ax.set_ylabel('(mm)')
 
+	def format_coord(x, y):
+		return f"x={int(x)} y={int(y)}"
+
+	ax.format_coord = format_coord
+
 	ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
 	ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
 

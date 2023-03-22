@@ -31,10 +31,11 @@ import hradiobutton
 	'-O', '--operation', type=click.Choice(('', 'sum', 'subtract')), default='',
 	help='operation to apply on the data'
 )
+@click.option('-o', '--output', type=click.Path(), default='', help='output file')
 @click.argument('mhd_files', nargs=-1, type=click.Path(exists=True))
 def main(
 	mhd_files: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
-	clamp: float, lnormalise: bool, normalise: bool, threshold: int, step: int, operation: str
+	clamp: float, lnormalise: bool, normalise: bool, threshold: int, step: int, operation: str, output: str
 ):
 	"""mhd/raw file viewer
 
@@ -127,19 +128,20 @@ def main(
 			colorbar.ax.set_title(f"% of\n{clamp[0]:.2e} to {clamp[1]:.2e}")
 
 	# UI
-	ax_depth = fig.add_axes([0.2, 0.0, 0.65, 0.05])
-	slider_x = mpl.widgets.Slider(
-		ax=ax_depth,
-		label='depth',
-		valmin=0,
-		valmax=raw.shape[mhdtools.to_plan_index[default_axis]]-1,
-		valinit=default_depth,
-		valstep=1
-	)
+	if output == '':
+		ax_depth = fig.add_axes([0.2, 0.0, 0.65, 0.05])
+		slider_x = mpl.widgets.Slider(
+			ax=ax_depth,
+			label='depth',
+			valmin=0,
+			valmax=raw.shape[mhdtools.to_plan_index[default_axis]]-1,
+			valinit=default_depth,
+			valstep=1
+		)
 
-	ax_plan = fig.add_axes([0.20, 0.9, 0.45, 0.06])
-	buttons = ('axial', 'sagittal', 'coronal')
-	select_plan_btn = hradiobutton.HRadioButtons(ax_plan, buttons, size=100, active=buttons.index(default_axis))
+		ax_plan = fig.add_axes([0.20, 0.9, 0.45, 0.06])
+		buttons = ('axial', 'sagittal', 'coronal')
+		select_plan_btn = hradiobutton.HRadioButtons(ax_plan, buttons, size=100, active=buttons.index(default_axis))
 
 	# Actions
 	plan = []
@@ -147,7 +149,7 @@ def main(
 	bg_plan = None
 
 	def select_plan(axis):
-		nonlocal slider_x, plan, extent, spacing, bg_plan
+		nonlocal plan, extent, spacing, bg_plan
 
 		plan = mhdtools.raw_plan(raw, axis)
 		if step != 1:
@@ -161,9 +163,11 @@ def main(
 		lspacing = [x for i, x in enumerate(spacing) if i != mhdtools.to_plan_index[axis]]
 		extent = [0, plan[0].shape[1] * lspacing[0], 0, plan[0].shape[0] * lspacing[1]]
 
-		slider_x.valmax = plan.shape[0]-1
-		slider_x.ax.set_xlim(slider_x.valmin, slider_x.valmax)
-		slider_x.set_val(slider_x.val if slider_x.val <= slider_x.valmax else slider_x.valmax)
+		if output == '':
+			nonlocal slider_x
+			slider_x.valmax = plan.shape[0]-1
+			slider_x.ax.set_xlim(slider_x.valmin, slider_x.valmax)
+			slider_x.set_val(slider_x.val if slider_x.val <= slider_x.valmax else slider_x.valmax)
 
 	def update(x):
 		nonlocal cmap, alpha, plan, bg_plan, colorbar, clamp
@@ -193,13 +197,21 @@ def main(
 				cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, lmax), cmap=cmap)
 				colorbar.update_normal(cmappable)
 
-	slider_x.on_changed(update)
-	select_plan_btn.on_clicked(select_plan)
+	if output == '':
+		slider_x.on_changed(update)
+		select_plan_btn.on_clicked(select_plan)
 
 	select_plan(default_axis)
+	if output != '':
+		update(default_depth)
 
 	plt.title(f"{mhd_files[0]}")
-	plt.show()
+
+	if output == '':
+		plt.show()
+	else:
+		plt.savefig(output)
+
 	plt.close(fig)
 
 

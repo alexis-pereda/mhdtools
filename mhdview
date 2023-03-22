@@ -28,7 +28,7 @@ import hradiobutton
 @click.option('-t', '--threshold', type=int, default=0, help='threshold (%) for colormap')
 @click.option('-D', 'step', type=int, default=1, help='resolution stepping')
 @click.option(
-	'-o', '--operation', type=click.Choice(('', 'sum', 'subtract')), default='',
+	'-O', '--operation', type=click.Choice(('', 'sum', 'subtract')), default='',
 	help='operation to apply on the data'
 )
 @click.argument('mhd_files', nargs=-1, type=click.Path(exists=True))

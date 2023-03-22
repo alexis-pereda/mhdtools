@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import threading
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +12,7 @@ import hradiobutton
 
 @click.command()
 @click.option(
-	'-b', '--background', 'background_mhd', type=click.Path(exists=True), default='',
+	'-b', '--background', 'background_mhd', type=click.Path(exists=True), default='.',
 	help='background mhd file'
 )
 @click.option('-a', '--alpha', default=.7, help='foreground alpha if background set')
@@ -36,13 +37,22 @@ def main(
 	with threshold (%)  mhdview -c -t2 file.mhd
 	"""
 
-	raw, spacing = mhdtools.load_data(mhd)
+	def worker_load(mhd, ret):
+		ret['raw'], ret['spacing'] = mhdtools.load_data(mhd)
 
-	background = None
-	if background_mhd != '':
-		background, _ = mhdtools.load_data(background_mhd)
+	workers = []
+
+	fg = {}
+	workers.append(threading.Thread(target=worker_load, args=(mhd, fg)))
+
+	bg = {}
+	if background_mhd != '.':
+		workers.append(threading.Thread(target=worker_load, args=(background_mhd, bg)))
 	else:
 		alpha = 1
+
+	for worker in workers:
+		worker.start()
 
 	fig, ax = plt.subplots()
 
@@ -63,6 +73,12 @@ def main(
 
 	if cmap == '':
 		cmap = 'gray'
+
+	for worker in workers:
+		worker.join()
+
+	raw, spacing  = fg['raw'], fg['spacing']
+	background    = bg['raw'] if 'raw' in bg else None
 
 	# UI
 	ax_depth = fig.add_axes([0.2, 0.0, 0.65, 0.05])
@@ -85,11 +101,7 @@ def main(
 	bg_plan = None
 
 	def select_plan(axis):
-		nonlocal slider_x
-		nonlocal plan
-		nonlocal extent
-		nonlocal spacing
-		nonlocal bg_plan
+		nonlocal slider_x, plan, extent, spacing, bg_plan
 
 		plan = mhdtools.raw_plan(raw, axis)
 		if step != 1:
@@ -109,11 +121,7 @@ def main(
 		slider_x.set_val(slider_x.val if slider_x.val <= slider_x.valmax else slider_x.valmax)
 
 	def update(x):
-		nonlocal cmap
-		nonlocal alpha
-		nonlocal plan
-		nonlocal bg_plan
-		nonlocal colorbar
+		nonlocal cmap, alpha, plan, bg_plan, colorbar
 
 		ax.cla()
 

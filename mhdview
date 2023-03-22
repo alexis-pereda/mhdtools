@@ -21,12 +21,16 @@ import hradiobutton
 @click.option('-d', '--depth', 'default_depth', type=int, default=0, help='default depth')
 @click.option('-N', '--lnormalise', default=False, is_flag=True, help='normalise foreground data for current layer')
 @click.option('-n', '--normalise', default=False, is_flag=True, help='normalise foreground data')
+@click.option(
+	'-m', '--maximum', 'user_max', type=float, default=None,
+	help='normalise foreground data based on a maximum value'
+)
 @click.option('-t', '--threshold', type=int, default=0, help='threshold (%) for colormap')
 @click.option('-D', 'step', type=int, default=1, help='resolution stepping')
 @click.argument('mhd', nargs=1, type=click.Path(exists=True))
 def main(
 	mhd: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
-	lnormalise: bool, normalise: bool, threshold: int, step: int
+	user_max: float, lnormalise: bool, normalise: bool, threshold: int, step: int
 ):
 	"""mhd/raw file viewer
 
@@ -38,8 +42,12 @@ def main(
 	with threshold (%)  mhdview -c -t2 file.mhd
 	"""
 
-	if lnormalise and normalise:
-		raise click.BadParameter('either -n or -N but not both')
+	nopts = 0
+	nopts = nopts + (1 if lnormalise else 0)
+	nopts = nopts + (1 if normalise else 0)
+	nopts = nopts + (1 if user_max is not None else 0)
+	if nopts > 1:
+		raise click.BadParameter('only one of (-n, -N, -m) is possible')
 
 	def worker_load(mhd, ret):
 		ret['raw'], ret['spacing'] = mhdtools.load_data(mhd)
@@ -85,8 +93,11 @@ def main(
 	background    = bg['raw'] if 'raw' in bg else None
 
 	gmax = np.max(raw)
-	if colorbar is not None and normalise:
-		colorbar.ax.set_title(f"% of\n{gmax:.2e}")
+	if colorbar is not None:
+		if normalise:
+			colorbar.ax.set_title(f"% of\n{gmax:.2e}")
+		elif user_max is not None:
+			colorbar.ax.set_title(f"% of\n{user_max:.2e}")
 
 	# UI
 	ax_depth = fig.add_axes([0.2, 0.0, 0.65, 0.05])
@@ -139,17 +150,19 @@ def main(
 		lmax = np.max(data)
 
 		norm = None
-		if lnormalise:
-			norm = mpl.colors.Normalize(0, lmax)
 		if normalise:
 			norm = mpl.colors.Normalize(0, gmax)
+		elif lnormalise:
+			norm = mpl.colors.Normalize(0, lmax)
+		elif user_max is not None:
+			norm = mpl.colors.Normalize(0, user_max)
 
 		ax.imshow(data, norm=norm, cmap=cmap, extent=extent, alpha=alpha)
 
 		if colorbar is not None:
 			if lnormalise:
 				colorbar.ax.set_title(f"% of {lmax:.2e}")
-			elif not normalise:
+			elif not normalise and user_max is None:
 				cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, lmax), cmap=cmap)
 				colorbar.update_normal(cmappable)
 

@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+import click
+
+import mhdtools
+import hradiobutton
+
+
+@click.command()
+@click.option(
+	'-b', '--background', 'background_mhd', type=click.Path(exists=True), default='',
+	help='background mhd file'
+)
+@click.option('-a', '--alpha', default=.7, help='foreground alpha if background set')
+@click.option('-c', '--cmap', default='', is_flag=False, flag_value='jet', help='foreground colormap')
+@click.option('-x', '--axis', 'default_axis', type=click.Choice(mhdtools.plans), default='axial', help='default axis')
+@click.option('-d', '--depth', 'default_depth', type=int, default=0, help='default depth')
+@click.option('-n', '--normalise', default=False, is_flag=True, help='normalise foreground data')
+@click.option('-t', '--threshold', type=int, default=0, help='threshold (%) for colormap')
+@click.option('-D', 'step', type=int, default=1, help='resolution stepping')
+@click.argument('mhd', nargs=1, type=click.Path(exists=True))
+def main(
+	mhd: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
+	normalise: bool, threshold: int, step: int
+):
+	"""mhd/raw file viewer
+
+	\b
+	examples:
+	basic usage         mhdview file.mhd
+	with background     mhdview -b bg.mhd file.mhd
+	with colour         mhdview file.mhd -c
+	with threshold (%)  mhdview -c -t2 file.mhd
+	"""
+
+	raw, spacing = mhdtools.load_data(mhd)
+
+	background = None
+	if background_mhd != '':
+		background, _ = mhdtools.load_data(background_mhd)
+	else:
+		alpha = 1
+
+	fig, ax = plt.subplots()
+
+	ax.set_xlabel('(mm)')
+	ax.set_ylabel('(mm)')
+
+	if threshold != 0:
+		colours = mpl.colormaps[cmap](np.linspace(0, 1, 1000))
+		newcolor = np.array([0., 0., 0., 0.])
+		colours[:int(threshold*10), :] = newcolor
+		cmap = mpl.colors.ListedColormap(colours)
+
+	colorbar = None
+	if cmap != '':
+		cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, 100), cmap=cmap)
+		colorbar = fig.colorbar(cmappable, ax=ax)
+		colorbar.ax.set_title('')
+
+	if cmap == '':
+		cmap = 'gray'
+
+	# UI
+	ax_depth = fig.add_axes([0.2, 0.0, 0.65, 0.05])
+	slider_x = mpl.widgets.Slider(
+		ax=ax_depth,
+		label='depth',
+		valmin=0,
+		valmax=raw.shape[mhdtools.to_plan_index[default_axis]]-1,
+		valinit=default_depth,
+		valstep=1
+	)
+
+	ax_plan = fig.add_axes([0.20, 0.9, 0.45, 0.06])
+	buttons = ('axial', 'sagittal', 'coronal')
+	select_plan_btn = hradiobutton.HRadioButtons(ax_plan, buttons, size=100, active=buttons.index(default_axis))
+
+	# Actions
+	plan = []
+	extent = []
+	bg_plan = None
+
+	def select_plan(axis):
+		nonlocal slider_x
+		nonlocal plan
+		nonlocal extent
+		nonlocal spacing
+		nonlocal bg_plan
+
+		plan = mhdtools.raw_plan(raw, axis)
+		if step != 1:
+			print(f"HELLO {step}")
+			plan = plan[:, ::step, ::step]
+
+		if background is not None:
+			bg_plan = mhdtools.raw_plan(background, axis)
+			if step != 1:
+				bg_plan = bg_plan[:, ::step, ::step]
+
+		lspacing = [x for i, x in enumerate(spacing) if i != mhdtools.to_plan_index[axis]]
+		extent = [0, plan[0].shape[1] * lspacing[0], 0, plan[0].shape[0] * lspacing[1]]
+
+		slider_x.valmax = plan.shape[0]-1
+		slider_x.ax.set_xlim(slider_x.valmin, slider_x.valmax)
+		slider_x.set_val(slider_x.val if slider_x.val <= slider_x.valmax else slider_x.valmax)
+
+	def update(x):
+		nonlocal cmap
+		nonlocal alpha
+		nonlocal plan
+		nonlocal bg_plan
+		nonlocal colorbar
+
+		ax.cla()
+
+		if bg_plan is not None:
+			ax.imshow(bg_plan[x], cmap='gray', extent=extent)
+
+		data = plan[x]
+		abs_max = np.max(data)
+		if normalise and abs_max != 0:
+			data /= abs_max
+
+		ax.imshow(data, cmap=cmap, extent=extent, alpha=alpha)
+
+		if colorbar is not None:
+			if not normalise:
+				cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, abs_max), cmap=cmap)
+				colorbar.update_normal(cmappable)
+			else:
+				colorbar.ax.set_title(f"% of {abs_max:.2e}")
+
+	slider_x.on_changed(update)
+	select_plan_btn.on_clicked(select_plan)
+
+	select_plan(default_axis)
+
+	plt.show()
+	plt.close(fig)
+
+
+mpl.use('tkagg')
+
+if __name__ == '__main__':
+	main()

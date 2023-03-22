@@ -22,8 +22,8 @@ import hradiobutton
 @click.option('-N', '--lnormalise', default=False, is_flag=True, help='normalise foreground data for current layer')
 @click.option('-n', '--normalise', default=False, is_flag=True, help='normalise foreground data')
 @click.option(
-	'-m', '--maximum', 'user_max', type=float, default=None,
-	help='normalise foreground data based on a maximum value'
+	'-C', '--clamp', type=(float, float), default=None,
+	help='clamp data'
 )
 @click.option('-t', '--threshold', type=int, default=0, help='threshold (%) for colormap')
 @click.option('-D', 'step', type=int, default=1, help='resolution stepping')
@@ -34,7 +34,7 @@ import hradiobutton
 @click.argument('mhd_files', nargs=-1, type=click.Path(exists=True))
 def main(
 	mhd_files: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
-	user_max: float, lnormalise: bool, normalise: bool, threshold: int, step: int, operation: str
+	clamp: float, lnormalise: bool, normalise: bool, threshold: int, step: int, operation: str
 ):
 	"""mhd/raw file viewer
 
@@ -54,7 +54,7 @@ def main(
 	nopts = 0
 	nopts = nopts + (1 if lnormalise else 0)
 	nopts = nopts + (1 if normalise else 0)
-	nopts = nopts + (1 if user_max is not None else 0)
+	nopts = nopts + (1 if clamp is not None else 0)
 	if nopts > 1:
 		raise click.BadParameter('only one of (-n, -N, -m) is possible')
 
@@ -80,6 +80,9 @@ def main(
 
 	ax.set_xlabel('(mm)')
 	ax.set_ylabel('(mm)')
+
+	ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
+	ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
 
 	if threshold != 0:
 		colours = mpl.colormaps[cmap](np.linspace(0, 1, 1000))
@@ -115,8 +118,8 @@ def main(
 	if colorbar is not None:
 		if normalise:
 			colorbar.ax.set_title(f"% of\n{gmax:.2e}")
-		elif user_max is not None:
-			colorbar.ax.set_title(f"% of\n{user_max:.2e}")
+		elif clamp is not None:
+			colorbar.ax.set_title(f"% of\n{clamp[0]:.2e} to {clamp[1]:.2e}")
 
 	# UI
 	ax_depth = fig.add_axes([0.2, 0.0, 0.65, 0.05])
@@ -158,7 +161,7 @@ def main(
 		slider_x.set_val(slider_x.val if slider_x.val <= slider_x.valmax else slider_x.valmax)
 
 	def update(x):
-		nonlocal cmap, alpha, plan, bg_plan, colorbar
+		nonlocal cmap, alpha, plan, bg_plan, colorbar, clamp
 
 		ax.cla()
 
@@ -173,15 +176,17 @@ def main(
 			norm = mpl.colors.Normalize(0, gmax)
 		elif lnormalise:
 			norm = mpl.colors.Normalize(0, lmax)
-		elif user_max is not None:
-			norm = mpl.colors.Normalize(0, user_max)
+		elif clamp is not None:
+			norm = mpl.colors.Normalize(clamp[0], clamp[1])
+		#  elif user_max is not None:
+			#  norm = mpl.colors.Normalize(0, user_max)
 
 		ax.imshow(data, norm=norm, cmap=cmap, extent=extent, alpha=alpha)
 
 		if colorbar is not None:
 			if lnormalise:
 				colorbar.ax.set_title(f"% of {lmax:.2e}")
-			elif not normalise and user_max is None:
+			elif not normalise and clamp is None:
 				cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, lmax), cmap=cmap)
 				colorbar.update_normal(cmappable)
 

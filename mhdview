@@ -183,8 +183,6 @@ def main(
 			norm = mpl.colors.Normalize(0, lmax)
 		elif clamp is not None:
 			norm = mpl.colors.Normalize(clamp[0], clamp[1])
-		#  elif user_max is not None:
-			#  norm = mpl.colors.Normalize(0, user_max)
 
 		ax.imshow(data, norm=norm, cmap=cmap, extent=extent, alpha=alpha)
 
@@ -200,6 +198,7 @@ def main(
 
 	select_plan(default_axis)
 
+	plt.title(f"{mhd_files[0]}")
 	plt.show()
 	plt.close(fig)
 

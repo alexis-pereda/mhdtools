@@ -10,8 +10,208 @@ import mhdtools
 import hradiobutton
 
 
+def format_coord(x, y):
+	return f"x={int(x)} y={int(y)}"
+
+
 def format_cursor_data(v):
 	return f"{v:.4e}"
+
+
+def worker_load(mhd, ret):
+	ret['raw'], ret['spacing'] = mhdtools.load_data(mhd)
+
+
+class MhdView:
+	fig = None
+	ax = None
+	plan = []
+	extent = []
+	bg_plan = None
+	cmap = None
+
+	raw = None
+	spacing = None
+
+	default_axis = 'axial'
+	default_depth = 0
+
+	alpha = 1
+	threshold = 0
+	step = 1
+
+	gmax = 0
+
+	slider_depth = None
+	button_select_plan = None
+
+	colorbar = None
+
+	title = ''
+	normalise = None
+
+	def __init__(self, cmap, alpha, threshold):
+		self.cmap = cmap
+		self.alpha = alpha
+		self.threshold = threshold
+
+	def set_normalise(self, mode):
+		self.normalise = mode
+
+	def set_defaults(self, axis, depth):
+		self.default_axis = axis
+		self.default_depth = depth
+
+	def set_title(self, title):
+		self.title = title
+
+	def set_step(self, step):
+		self.step = step
+
+	def open(self, mhd_files, background_mhd, operation=''):
+		workers = []
+
+		fgs = [{} for mhd in mhd_files]
+		for mhd, fg in zip(mhd_files, fgs):
+			workers.append(threading.Thread(target=worker_load, args=(mhd, fg)))
+
+		bg = {}
+		if background_mhd != '.':
+			workers.append(threading.Thread(target=worker_load, args=(background_mhd, bg)))
+		else:
+			self.alpha = 1
+
+		for worker in workers:
+			worker.start()
+
+		self.fig, self.ax = plt.subplots()
+
+		self.ax.set_xlabel('(mm)')
+		self.ax.set_ylabel('(mm)')
+
+		self.ax.format_coord = format_coord
+
+		self.ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
+		self.ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
+
+		if self.threshold != 0:
+			colours = mpl.colormaps[self.cmap](np.linspace(0, 1, 1000))
+			newcolor = np.array([0., 0., 0., 0.])
+			colours[:int(self.threshold*10), :] = newcolor
+			self.cmap = mpl.colors.ListedColormap(colours)
+
+		if self.cmap != '':
+			cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, 100), cmap=self.cmap)
+			self.colorbar = self.fig.colorbar(cmappable, ax=self.ax)
+			self.colorbar.ax.set_title('')
+
+		if self.cmap == '':
+			self.cmap = 'gray'
+
+		for worker in workers:
+			worker.join()
+
+		self.raw, self.spacing = None, None
+		if len(mhd_files) == 1:
+			self.raw, self.spacing  = fgs[0]['raw'], fgs[0]['spacing']
+		else:
+			self.spacing = fgs[0]['spacing']
+			if operation == 'sum':
+				self.raw = np.array(sum([fg['raw'] for fg in fgs]))
+			elif operation == 'subtract':
+				self.raw = fgs[0]['raw'] - np.array(sum([fg['raw'] for fg in fgs[1:]]))
+
+		self.background = bg['raw'] if 'raw' in bg else None
+
+		self.gmax = np.max(self.raw)
+		if self.colorbar is not None:
+			if isinstance(self.normalise, tuple):
+				self.colorbar.ax.set_title(f"% of\n{self.normalise[0]:.2e} to {self.normalise[1]:.2e}")
+			elif self.normalise == 'global':
+				self.colorbar.ax.set_title(f"% of\n{self.gmax:.2e}")
+
+	def view(self):
+		self.setup_ui()
+		self.slider_depth.on_changed(lambda depth: self.update(depth))
+		self.button_select_plan.on_clicked(lambda plan: self.select_plan(plan))
+		self.select_plan(self.default_axis)
+		self.update(self.default_depth)
+
+		plt.title(self.title)
+		plt.show()
+
+	def save(self, output):
+		self.select_plan(self.default_axis)
+		self.update(self.default_depth)
+		plt.title(self.title)
+		plt.savefig(output)
+
+	def setup_ui(self):
+		ax_depth = self.fig.add_axes([0.2, 0.0, 0.65, 0.05])
+		self.slider_depth = mpl.widgets.Slider(
+			ax=ax_depth,
+			label='depth',
+			valmin=0,
+			valmax=self.raw.shape[mhdtools.to_plan_index[self.default_axis]]-1,
+			valinit=self.default_depth,
+			valstep=1
+		)
+
+		ax_plan = self.fig.add_axes([0.20, 0.9, 0.45, 0.06])
+		buttons = ('axial', 'sagittal', 'coronal')
+		self.button_select_plan = hradiobutton.HRadioButtons(
+			ax_plan, buttons, size=100, active=buttons.index(self.default_axis)
+		)
+
+	def close(self):
+		plt.close(self.fig)
+
+	def select_plan(self, axis):
+		self.plan = mhdtools.raw_plan(self.raw, axis)
+		if self.step != 1:
+			self.plan = self.plan[:, ::self.step, ::self.step]
+
+		if self.background is not None:
+			self.bg_plan = mhdtools.raw_plan(self.background, axis)
+			if self.step != 1:
+				self.bg_plan = self.bg_plan[:, ::self.step, ::self.step]
+
+		lspacing = [x for i, x in enumerate(self.spacing) if i != mhdtools.to_plan_index[axis]]
+		self.extent = [0, self.plan[0].shape[1] * lspacing[0], 0, self.plan[0].shape[0] * lspacing[1]]
+
+		if self.slider_depth is not None:
+			self.slider_depth.valmax = self.plan.shape[0]-1
+			self.slider_depth.ax.set_xlim(self.slider_depth.valmin, self.slider_depth.valmax)
+			self.slider_depth.set_val(
+				self.slider_depth.val if self.slider_depth.val <= self.slider_depth.valmax else self.slider_depth.valmax
+			)
+
+	def update(self, x):
+		self.ax.cla()
+
+		if self.bg_plan is not None:
+			self.ax.imshow(self.bg_plan[x], cmap='gray', extent=self.extent)
+
+		data = self.plan[x]
+		lmax = np.max(data)
+
+		norm = None
+		if isinstance(self.normalise, tuple):
+			norm = mpl.colors.Normalize(self.normalise[0], self.normalise[1])
+		elif self.normalise == 'global':
+			norm = mpl.colors.Normalize(0, self.gmax)
+		elif self.normalise == 'slice':
+			norm = mpl.colors.Normalize(0, lmax)
+
+		img = self.ax.imshow(data, norm=norm, cmap=self.cmap, extent=self.extent, alpha=self.alpha)
+		img.format_cursor_data = format_cursor_data
+
+		if self.colorbar is not None:
+			if self.normalise == 'slice':
+				self.colorbar.ax.set_title(f"% of {lmax:.2e}")
+			elif self.normalise is None:
+				cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, lmax), cmap=self.cmap)
+				self.colorbar.update_normal(cmappable)
 
 
 @click.command()
@@ -63,161 +263,26 @@ def main(
 	if nopts > 1:
 		raise click.BadParameter('only one of (-n, -N, -m) is possible')
 
-	def worker_load(mhd, ret):
-		ret['raw'], ret['spacing'] = mhdtools.load_data(mhd)
+	mhd_view = MhdView(cmap, alpha, threshold)
+	mhd_view.set_defaults(default_axis, default_depth)
 
-	workers = []
+	if clamp is not None:
+		mhd_view.set_normalise(clamp)
+	elif normalise:
+		mhd_view.set_normalise('global')
+	elif lnormalise:
+		mhd_view.set_normalise('slice')
 
-	fgs = [{} for mhd in mhd_files]
-	for mhd, fg in zip(mhd_files, fgs):
-		workers.append(threading.Thread(target=worker_load, args=(mhd, fg)))
-
-	bg = {}
-	if background_mhd != '.':
-		workers.append(threading.Thread(target=worker_load, args=(background_mhd, bg)))
-	else:
-		alpha = 1
-
-	for worker in workers:
-		worker.start()
-
-	fig, ax = plt.subplots()
-
-	ax.set_xlabel('(mm)')
-	ax.set_ylabel('(mm)')
-
-	def format_coord(x, y):
-		return f"x={int(x)} y={int(y)}"
-
-	ax.format_coord = format_coord
-
-	ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
-	ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
-
-	if threshold != 0:
-		colours = mpl.colormaps[cmap](np.linspace(0, 1, 1000))
-		newcolor = np.array([0., 0., 0., 0.])
-		colours[:int(threshold*10), :] = newcolor
-		cmap = mpl.colors.ListedColormap(colours)
-
-	colorbar = None
-	if cmap != '':
-		cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, 100), cmap=cmap)
-		colorbar = fig.colorbar(cmappable, ax=ax)
-		colorbar.ax.set_title('')
-
-	if cmap == '':
-		cmap = 'gray'
-
-	for worker in workers:
-		worker.join()
-
-	raw, spacing = None, None
-	if len(mhd_files) == 1:
-		raw, spacing  = fgs[0]['raw'], fgs[0]['spacing']
-	else:
-		spacing = fgs[0]['spacing']
-		if operation == 'sum':
-			raw = np.array(sum([fg['raw'] for fg in fgs]))
-		elif operation == 'subtract':
-			raw = fgs[0]['raw'] - np.array(sum([fg['raw'] for fg in fgs[1:]]))
-
-	background    = bg['raw'] if 'raw' in bg else None
-
-	gmax = np.max(raw)
-	if colorbar is not None:
-		if normalise:
-			colorbar.ax.set_title(f"% of\n{gmax:.2e}")
-		elif clamp is not None:
-			colorbar.ax.set_title(f"% of\n{clamp[0]:.2e} to {clamp[1]:.2e}")
-
-	# UI
-	if output == '':
-		ax_depth = fig.add_axes([0.2, 0.0, 0.65, 0.05])
-		slider_x = mpl.widgets.Slider(
-			ax=ax_depth,
-			label='depth',
-			valmin=0,
-			valmax=raw.shape[mhdtools.to_plan_index[default_axis]]-1,
-			valinit=default_depth,
-			valstep=1
-		)
-
-		ax_plan = fig.add_axes([0.20, 0.9, 0.45, 0.06])
-		buttons = ('axial', 'sagittal', 'coronal')
-		select_plan_btn = hradiobutton.HRadioButtons(ax_plan, buttons, size=100, active=buttons.index(default_axis))
-
-	# Actions
-	plan = []
-	extent = []
-	bg_plan = None
-
-	def select_plan(axis):
-		nonlocal plan, extent, spacing, bg_plan
-
-		plan = mhdtools.raw_plan(raw, axis)
-		if step != 1:
-			plan = plan[:, ::step, ::step]
-
-		if background is not None:
-			bg_plan = mhdtools.raw_plan(background, axis)
-			if step != 1:
-				bg_plan = bg_plan[:, ::step, ::step]
-
-		lspacing = [x for i, x in enumerate(spacing) if i != mhdtools.to_plan_index[axis]]
-		extent = [0, plan[0].shape[1] * lspacing[0], 0, plan[0].shape[0] * lspacing[1]]
-
-		if output == '':
-			nonlocal slider_x
-			slider_x.valmax = plan.shape[0]-1
-			slider_x.ax.set_xlim(slider_x.valmin, slider_x.valmax)
-			slider_x.set_val(slider_x.val if slider_x.val <= slider_x.valmax else slider_x.valmax)
-
-	def update(x):
-		nonlocal cmap, alpha, plan, bg_plan, colorbar, clamp
-
-		ax.cla()
-
-		if bg_plan is not None:
-			ax.imshow(bg_plan[x], cmap='gray', extent=extent)
-
-		data = plan[x]
-		lmax = np.max(data)
-
-		norm = None
-		if normalise:
-			norm = mpl.colors.Normalize(0, gmax)
-		elif lnormalise:
-			norm = mpl.colors.Normalize(0, lmax)
-		elif clamp is not None:
-			norm = mpl.colors.Normalize(clamp[0], clamp[1])
-
-		img = ax.imshow(data, norm=norm, cmap=cmap, extent=extent, alpha=alpha)
-		img.format_cursor_data = format_cursor_data
-
-		if colorbar is not None:
-			if lnormalise:
-				colorbar.ax.set_title(f"% of {lmax:.2e}")
-			elif not normalise and clamp is None:
-				cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, lmax), cmap=cmap)
-				colorbar.update_normal(cmappable)
+	mhd_view.open(mhd_files, background_mhd, operation)
+	mhd_view.set_title(mhd_files[0])
 
 	if output == '':
-		slider_x.on_changed(update)
-		select_plan_btn.on_clicked(select_plan)
-
-	select_plan(default_axis)
-	if output != '':
-		update(default_depth)
-
-	plt.title(f"{mhd_files[0]}")
-
-	if output == '':
-		plt.show()
+		mhd_view.set_step(step)
+		mhd_view.view()
 	else:
-		plt.savefig(output)
+		mhd_view.save(output)
 
-	plt.close(fig)
+	mhd_view.close()
 
 
 mpl.use('tkagg')

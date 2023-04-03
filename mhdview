@@ -263,7 +263,7 @@ def main(
 	with threshold (%)  mhdview -c -t2 file.mhd
 	"""
 
-	if cmap not in mpl.colormaps:
+	if cmap != '' and cmap not in mpl.colormaps:
 		mhd_files = (click.Path(exists=True)(cmap),) + mhd_files
 		cmap = 'jet'
 

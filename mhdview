@@ -68,7 +68,7 @@ class MhdView:
 	def set_step(self, step):
 		self.step = step
 
-	def open(self, mhd_files, background_mhd, operation=''):
+	def open(self, mhd_files, background_mhd, operation='', log=False):
 		workers = []
 
 		fgs = [{} for mhd in mhd_files]
@@ -123,6 +123,16 @@ class MhdView:
 
 		self.background = bg['raw'] if 'raw' in bg else None
 
+		# post computation
+		if log:
+			threshold = 0
+			min_pos = np.min(np.where(self.raw > threshold, self.raw, np.inf))
+			# min_pos could be negative or null…
+			clean_data = np.where(self.raw > threshold, self.raw, min_pos)
+			self.raw = np.log10(clean_data)
+
+		# color bar
+		self.gmin = np.min(self.raw)
 		self.gmax = np.max(self.raw)
 		if self.colorbar is not None:
 			if isinstance(self.normalise, tuple):
@@ -193,15 +203,16 @@ class MhdView:
 			self.ax.imshow(self.bg_plan[x], cmap='gray', extent=self.extent)
 
 		data = self.plan[x]
+		lmin = np.min(data)
 		lmax = np.max(data)
 
 		norm = None
 		if isinstance(self.normalise, tuple):
 			norm = mpl.colors.Normalize(self.normalise[0], self.normalise[1])
 		elif self.normalise == 'global':
-			norm = mpl.colors.Normalize(0, self.gmax)
+			norm = mpl.colors.Normalize(self.gmin, self.gmax)
 		elif self.normalise == 'slice':
-			norm = mpl.colors.Normalize(0, lmax)
+			norm = mpl.colors.Normalize(lmin, lmax)
 
 		img = self.ax.imshow(data, norm=norm, cmap=self.cmap, extent=self.extent, alpha=self.alpha)
 		img.format_cursor_data = format_cursor_data
@@ -225,6 +236,7 @@ class MhdView:
 @click.option('-d', '--depth', 'default_depth', type=int, default=0, help='default depth')
 @click.option('-N', '--lnormalise', default=False, is_flag=True, help='normalise foreground data for current layer')
 @click.option('-n', '--normalise', default=False, is_flag=True, help='normalise foreground data')
+@click.option('-l', '--log', default=False, is_flag=True, help='log scale')
 @click.option(
 	'-C', '--clamp', type=(float, float), default=None,
 	help='clamp data'
@@ -239,7 +251,7 @@ class MhdView:
 @click.argument('mhd_files', nargs=-1, type=click.Path(exists=True))
 def main(
 	mhd_files: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
-	clamp: float, lnormalise: bool, normalise: bool, threshold: int, step: int, operation: str, output: str
+	clamp: float, lnormalise: bool, normalise: bool, log: bool, threshold: int, step: int, operation: str, output: str
 ):
 	"""mhd/raw file viewer
 
@@ -277,7 +289,7 @@ def main(
 	elif lnormalise:
 		mhd_view.set_normalise('slice')
 
-	mhd_view.open(mhd_files, background_mhd, operation)
+	mhd_view.open(mhd_files, background_mhd, operation, log=log)
 	mhd_view.set_title(mhd_files[0])
 
 	if output == '':

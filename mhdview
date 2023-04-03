@@ -251,6 +251,10 @@ def main(
 	with threshold (%)  mhdview -c -t2 file.mhd
 	"""
 
+	if cmap not in mpl.colormaps:
+		mhd_files = (click.Path(exists=True)(cmap),) + mhd_files
+		cmap = 'jet'
+
 	if len(mhd_files) == 0:
 		raise click.MissingParameter('at least one mhd file is required')
 	elif len(mhd_files) > 1 and operation == '':

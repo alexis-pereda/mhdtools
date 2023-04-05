@@ -11,7 +11,7 @@ import hradiobutton
 
 
 def format_coord(x, y):
-	return f"x={int(x)} y={int(y)}"
+	return f"x={x:.3f} y={y:.3f}"
 
 
 def format_cursor_data(v):
@@ -50,6 +50,8 @@ class MhdView:
 	title = ''
 	normalise = None
 
+	rot = 0
+
 	def __init__(self, cmap, alpha, threshold):
 		self.cmap = cmap
 		self.alpha = alpha
@@ -67,6 +69,10 @@ class MhdView:
 
 	def set_step(self, step):
 		self.step = step
+
+	def set_rot(self, angle):
+		if angle % 90 == 0:
+			self.rot = ((angle + 360) % 360) // 90
 
 	def open(self, mhd_files, background_mhd, operation='', log=False):
 		workers = []
@@ -204,11 +210,17 @@ class MhdView:
 		self.ax.cla()
 
 		if self.bg_plan is not None:
-			self.ax.imshow(self.bg_plan[x], cmap='gray', extent=self.extent)
+			bg_slice = self.bg_plan[x]
+			if self.rot != 0:
+				bg_slice = np.rot90(bg_slice, k=self.rot)
+			self.ax.imshow(bg_slice, cmap='gray', extent=self.extent)
 
 		data = self.plan[x]
 		lmin = np.min(data)
 		lmax = np.max(data)
+
+		if self.rot != 0:
+			data = np.rot90(data, k=self.rot)
 
 		norm = None
 		if isinstance(self.normalise, tuple):
@@ -245,6 +257,7 @@ class MhdView:
 	'-C', '--clamp', type=(float, float), default=None,
 	help='clamp data'
 )
+@click.option('-r', '--rotate', type=int, default=0, help='rotation angle in degrees (multiple of 90)')
 @click.option('-t', '--threshold', type=int, default=0, help='threshold (%) for colormap')
 @click.option('-D', 'step', type=int, default=1, help='resolution stepping')
 @click.option(
@@ -255,7 +268,8 @@ class MhdView:
 @click.argument('mhd_files', nargs=-1, type=click.Path(exists=True))
 def main(
 	mhd_files: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
-	clamp: float, lnormalise: bool, normalise: bool, log: bool, threshold: int, step: int, operation: str, output: str
+	clamp: float, lnormalise: bool, normalise: bool, log: bool, threshold: int, step: int, operation: str, output: str,
+	rotate: int
 ):
 	"""mhd/raw file viewer
 
@@ -285,6 +299,7 @@ def main(
 
 	mhd_view = MhdView(cmap, alpha, threshold)
 	mhd_view.set_defaults(default_axis, default_depth)
+	mhd_view.set_rot(rotate)
 
 	if clamp is not None:
 		mhd_view.set_normalise(clamp)

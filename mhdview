@@ -51,6 +51,7 @@ class MhdView:
 	normalise = None
 
 	rot = 0
+	flip = ''
 
 	def __init__(self, cmap, alpha, threshold):
 		self.cmap = cmap
@@ -73,6 +74,9 @@ class MhdView:
 	def set_rot(self, angle):
 		if angle % 90 == 0:
 			self.rot = ((angle + 360) % 360) // 90
+
+	def set_flip(self, flip):
+		self.flip = flip
 
 	def open(self, mhd_files, background_mhd, operation='', log=False):
 		workers = []
@@ -213,6 +217,10 @@ class MhdView:
 			bg_slice = self.bg_plan[x]
 			if self.rot != 0:
 				bg_slice = np.rot90(bg_slice, k=self.rot)
+			if 'h' in self.flip:
+				bg_slice = np.flip(bg_slice, axis=(1))
+			if 'v' in self.flip:
+				bg_slice = np.flip(bg_slice, axis=(0))
 			self.ax.imshow(bg_slice, cmap='gray', extent=self.extent)
 
 		data = self.plan[x]
@@ -221,6 +229,10 @@ class MhdView:
 
 		if self.rot != 0:
 			data = np.rot90(data, k=self.rot)
+		if 'h' in self.flip:
+			data = np.flip(data, axis=(1))
+		if 'v' in self.flip:
+			data = np.flip(data, axis=(0))
 
 		norm = None
 		if isinstance(self.normalise, tuple):
@@ -258,6 +270,7 @@ class MhdView:
 	help='clamp data'
 )
 @click.option('-r', '--rotate', type=int, default=0, help='rotation angle in degrees (multiple of 90)')
+@click.option('--flip', type=click.Choice(['', 'h', 'v', 'hv', 'vh']), default='', help='flip horizontally or/and vertically')
 @click.option('-t', '--threshold', type=int, default=0, help='threshold (%) for colormap')
 @click.option('-D', 'step', type=int, default=1, help='resolution stepping')
 @click.option(
@@ -269,7 +282,7 @@ class MhdView:
 def main(
 	mhd_files: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
 	clamp: float, lnormalise: bool, normalise: bool, log: bool, threshold: int, step: int, operation: str, output: str,
-	rotate: int
+	rotate: int, flip: str
 ):
 	"""mhd/raw file viewer
 
@@ -300,6 +313,7 @@ def main(
 	mhd_view = MhdView(cmap, alpha, threshold)
 	mhd_view.set_defaults(default_axis, default_depth)
 	mhd_view.set_rot(rotate)
+	mhd_view.set_flip(flip)
 
 	if clamp is not None:
 		mhd_view.set_normalise(clamp)

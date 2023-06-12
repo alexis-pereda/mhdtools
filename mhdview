@@ -168,6 +168,7 @@ class MhdView:
 		self.select_plan(self.default_axis)
 		self.update(self.default_depth)
 		plt.title(self.title)
+		plt.tight_layout()
 		plt.savefig(output)
 
 	def setup_ui(self):
@@ -278,11 +279,12 @@ class MhdView:
 	help='operation to apply on the data'
 )
 @click.option('-o', '--output', type=click.Path(), default='', help='output file')
+@click.option('-T', '--title', type=str, default='auto', help='figure title')
 @click.argument('mhd_files', nargs=-1, type=click.Path(exists=True))
 def main(
 	mhd_files: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
 	clamp: float, lnormalise: bool, normalise: bool, log: bool, threshold: int, step: int, operation: str, output: str,
-	rotate: int, flip: str
+	rotate: int, flip: str, title: str
 ):
 	"""mhd/raw file viewer
 
@@ -323,7 +325,7 @@ def main(
 		mhd_view.set_normalise('slice')
 
 	mhd_view.open(mhd_files, background_mhd, operation, log=log)
-	mhd_view.set_title(mhd_files[0])
+	mhd_view.set_title(mhd_files[0] if title == 'auto' else title)
 
 	if output == '':
 		mhd_view.set_step(step)

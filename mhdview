@@ -130,6 +130,8 @@ class MhdView:
 				self.raw = np.array(sum([fg['raw'] for fg in fgs]))
 			elif operation == 'subtract':
 				self.raw = fgs[0]['raw'] - np.array(sum([fg['raw'] for fg in fgs[1:]]))
+			elif operation == 'multiply':
+				self.raw = np.array(np.multiply(fgs[0]['raw'], fgs[1]['raw']))
 			elif operation == 'divide':
 				numerator = fgs[0]['raw']
 				denominator = np.array(sum([fg['raw'] for fg in fgs[1:]]))
@@ -275,7 +277,7 @@ class MhdView:
 @click.option('-t', '--threshold', type=int, default=0, help='threshold (%) for colormap')
 @click.option('-D', 'step', type=int, default=1, help='resolution stepping')
 @click.option(
-	'-O', '--operation', type=click.Choice(('', 'sum', 'subtract', 'divide')), default='',
+	'-O', '--operation', type=click.Choice(('', 'multiply', 'sum', 'subtract', 'divide')), default='',
 	help='operation to apply on the data'
 )
 @click.option('-o', '--output', type=click.Path(), default='', help='output file')

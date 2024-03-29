@@ -177,12 +177,12 @@ class MhdView:
 		plt.title(self.title)
 		plt.show()
 
-	def save(self, output):
+	def save(self, output, dpi=300):
 		self.select_plan(self.default_axis)
 		self.update(self.default_depth)
 		plt.title(self.title)
 		plt.tight_layout()
-		plt.savefig(output)
+		plt.savefig(output, dpi=dpi)
 
 	def setup_ui(self):
 		ax_depth = self.fig.add_axes([0.2, 0.0, 0.65, 0.05])
@@ -347,7 +347,7 @@ def main(
 		mhd_view.set_step(step)
 		mhd_view.view()
 	else:
-		mhd_view.save(output)
+		mhd_view.save(output, dpi=300)
 
 	mhd_view.close()
 

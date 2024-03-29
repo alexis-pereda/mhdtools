@@ -48,6 +48,7 @@ class MhdView:
 	colorbar = None
 
 	title = ''
+	cbar_title = 'auto'
 	normalise = None
 
 	rot = 0
@@ -67,6 +68,12 @@ class MhdView:
 
 	def set_title(self, title):
 		self.title = title
+
+	def set_cbar_title(self, cbar_title):
+		self.cbar_title = cbar_title
+
+	def select_cbar_title(self, auto_title):
+		return auto_title if self.cbar_title == 'auto' else self.cbar_title
 
 	def set_step(self, step):
 		self.step = step
@@ -152,9 +159,10 @@ class MhdView:
 		self.gmax = np.max(self.raw)
 		if self.colorbar is not None:
 			if isinstance(self.normalise, tuple):
-				self.colorbar.ax.set_title(f"% of\n{self.normalise[0]:.2e} to {self.normalise[1]:.2e}")
+				title = self.select_cbar_title(f"% of\n{self.normalise[0]:.2e} to {self.normalise[1]:.2e}")
+				self.colorbar.ax.set_title(title)
 			elif self.normalise == 'global':
-				self.colorbar.ax.set_title(f"% of\n{self.gmax:.2e}")
+				self.colorbar.ax.set_title(self.select_cbar_title(f"% of\n{self.gmax:.2e}"))
 
 	def view(self):
 		self.setup_ui()
@@ -250,7 +258,7 @@ class MhdView:
 
 		if self.colorbar is not None:
 			if self.normalise == 'slice':
-				self.colorbar.ax.set_title(f"% of {lmax:.2e}")
+				self.colorbar.ax.set_title(self.select_cbar_title(f"% of {lmax:.2e}"))
 			elif self.normalise is None:
 				cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, lmax), cmap=self.cmap)
 				self.colorbar.update_normal(cmappable)
@@ -282,11 +290,12 @@ class MhdView:
 )
 @click.option('-o', '--output', type=click.Path(), default='', help='output file')
 @click.option('-T', '--title', type=str, default='auto', help='figure title')
+@click.option('--cbar-title', type=str, default='auto', help='colorbar title')
 @click.argument('mhd_files', nargs=-1, type=click.Path(exists=True))
 def main(
 	mhd_files: str, background_mhd: str, alpha: float, cmap: str, default_axis: str, default_depth: int,
 	clamp: float, lnormalise: bool, normalise: bool, log: bool, threshold: int, step: int, operation: str, output: str,
-	rotate: int, flip: str, title: str
+	rotate: int, flip: str, title: str, cbar_title: str
 ):
 	"""mhd/raw file viewer
 
@@ -326,6 +335,7 @@ def main(
 	elif lnormalise:
 		mhd_view.set_normalise('slice')
 
+	mhd_view.set_cbar_title(cbar_title)
 	mhd_view.open(mhd_files, background_mhd, operation, log=log)
 	mhd_view.set_title(mhd_files[0] if title == 'auto' else title)
 

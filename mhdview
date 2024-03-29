@@ -85,6 +85,15 @@ class MhdView:
 	def set_flip(self, flip):
 		self.flip = flip
 
+	def setup_axis(self):
+		self.ax.set_xlabel('(mm)')
+		self.ax.set_ylabel('(mm)')
+
+		self.ax.format_coord = format_coord
+
+		self.ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
+		self.ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
+
 	def open(self, mhd_files, background_mhd, operation='', log=False):
 		workers = []
 
@@ -103,13 +112,7 @@ class MhdView:
 
 		self.fig, self.ax = plt.subplots()
 
-		self.ax.set_xlabel('(mm)')
-		self.ax.set_ylabel('(mm)')
-
-		self.ax.format_coord = format_coord
-
-		self.ax.xaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
-		self.ax.yaxis.set_major_locator(mpl.ticker.MaxNLocator(integer=True))
+		self.setup_axis()
 
 		if self.threshold != 0:
 			colours = mpl.colormaps[self.cmap](np.linspace(0, 1, 1000))
@@ -223,6 +226,7 @@ class MhdView:
 
 	def update(self, x):
 		self.ax.cla()
+		self.setup_axis()
 
 		if self.bg_plan is not None:
 			bg_slice = self.bg_plan[x]

@@ -34,9 +34,16 @@ def raw_slice(raw, axis, slice_number):
 	return np.array(raw_plan(raw, axis)[slice_number])
 
 
+def try_3d_projection(a):
+	return a.squeeze()
+
+
 def load_data(mhd):
 	img = sitk.ReadImage(mhd)
-	return np.array(sitk.GetArrayFromImage(img)), img.GetSpacing()
+	array = np.array(sitk.GetArrayFromImage(img))
+	if len(array.shape) == 4:
+		array = try_3d_projection(array)
+	return array, img.GetSpacing()
 
 
 def load(mhd, axis):

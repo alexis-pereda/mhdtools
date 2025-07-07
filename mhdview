@@ -177,7 +177,8 @@ class MhdView:
 		self.slider_depth.on_changed(lambda depth: self.update(depth))
 		self.button_select_plan.on_clicked(lambda plan: self.select_plan(plan))
 		self.button_show_peak.on_clicked(lambda ev: self.select_plan_peak())
-		self.select_plan(self.default_axis)
+		labels = [label.get_text() for label in self.button_select_plan.labels]
+		self.button_select_plan.set_active(labels.index(self.default_axis))
 		self.update(self.default_depth)
 
 		self.ax.set_title(self.title)

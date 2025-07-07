@@ -44,6 +44,7 @@ class MhdView:
 
 	slider_depth = None
 	button_select_plan = None
+	button_show_peak = None
 
 	colorbar = None
 
@@ -175,6 +176,7 @@ class MhdView:
 		self.setup_ui()
 		self.slider_depth.on_changed(lambda depth: self.update(depth))
 		self.button_select_plan.on_clicked(lambda plan: self.select_plan(plan))
+		self.button_show_peak.on_clicked(lambda ev: self.select_plan_peak())
 		self.select_plan(self.default_axis)
 		self.update(self.default_depth)
 
@@ -200,9 +202,12 @@ class MhdView:
 			valstep=1
 		)
 
-		ax_plan = self.fig.add_axes([0.83, 0.5, 0.15, 0.21])
+		ax_plan = self.fig.add_axes([.83, .5, .15, .21])
 		buttons = ('axial', 'sagittal', 'coronal')
 		self.button_select_plan = mpl.widgets.RadioButtons(ax_plan, buttons)
+
+		ax_show_peak = self.fig.add_axes([.83, .3, .15, .1])
+		self.button_show_peak = mpl.widgets.Button(ax_show_peak, "show peak")
 
 	def close(self):
 		plt.close(self.fig)
@@ -226,6 +231,22 @@ class MhdView:
 			self.slider_depth.set_val(
 				self.slider_depth.val if self.slider_depth.val <= self.slider_depth.valmax else self.slider_depth.valmax
 			)
+
+	def select_plan_peak(self):
+		data = mhdtools.raw_plan(self.raw, self.button_select_plan.value_selected)
+		data = np.array([np.max(plan) for plan in data])
+		peaks = data == np.max(data)
+
+		# rotate between peaks if multiple occurrences
+		pos = self.slider_depth.val
+		peak_depth = 0
+		if pos+1 < len(peaks):
+			peak_depth = np.argmax(peaks[pos+1:]) + pos + 1
+
+		if not peaks[peak_depth]:
+			peak_depth = np.argmax(peaks)
+
+		self.slider_depth.set_val(peak_depth)
 
 	def update(self, x):
 		self.ax.cla()

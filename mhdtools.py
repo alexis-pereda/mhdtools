@@ -43,21 +43,23 @@ def load_data(mhd):
 	array = np.array(sitk.GetArrayFromImage(img))
 	if len(array.shape) == 4:
 		array = try_3d_projection(array)
-	return array, img.GetSpacing()
+	return array, img.GetOrigin(), img.GetSpacing()
 
 
 def load(mhd, axis):
-	data, spacing = load_data(mhd)
+	data, origin, spacing = load_data(mhd)
+	origin = origin[to_plan_index[axis]]
 	spacing = spacing[to_plan_index[axis]]
 	data = to_plan[axis](data)
-	return np.array(data), spacing
+	return np.array(data), origin, spacing
 
 
 def load_slice(mhd, axis, slice_number):
-	data, spacing = load_data(mhd)
+	data, origin, spacing = load_data(mhd)
+	origin = [x for i, x in enumerate(origin) if i != to_plan_index[axis]]
 	spacing = [x for i, x in enumerate(spacing) if i != to_plan_index[axis]]
 	data = to_plan[axis](data)
-	return np.array(data[slice_number]), spacing
+	return np.array(data[slice_number]), origin, spacing
 
 
 def to_color_v(value, color):

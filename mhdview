@@ -19,7 +19,7 @@ def format_cursor_data(v):
 
 
 def worker_load(mhd, ret):
-	ret['raw'], ret['spacing'] = mhdtools.load_data(mhd)
+	ret['raw'], ret['origin'], ret['spacing'] = mhdtools.load_data(mhd)
 
 
 class MhdView:
@@ -131,10 +131,11 @@ class MhdView:
 		for worker in workers:
 			worker.join()
 
-		self.raw, self.spacing = None, None
+		self.raw, self.origin, self.spacing = None, None, None
 		if len(mhd_files) == 1:
-			self.raw, self.spacing  = fgs[0]['raw'], fgs[0]['spacing']
+			self.raw, self.origin, self.spacing  = fgs[0]['raw'], fgs[0]['origin'], fgs[0]['spacing']
 		else:
+			self.origin = fgs[0]['origin']
 			self.spacing = fgs[0]['spacing']
 			if operation == 'sum':
 				self.raw = np.array(sum([fg['raw'] for fg in fgs]))

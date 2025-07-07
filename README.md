@@ -7,7 +7,7 @@ Python packages:
 - `SimpleITK`
 - `scipy`
 - `numpy`
-- `matplotlib==3.5.2`
+- `matplotlib`
 
 ## Installation
 
@@ -17,7 +17,7 @@ A python virtual environment is advised:
 python -m venv mhdtools
 source mhdtools/bin/activate
 pip install -U pip
-pip install click SimpleITK scipy numpy matplotlib==3.5.2
+pip install click SimpleITK scipy numpy matplotlib
 ```
 
 ## Helper script

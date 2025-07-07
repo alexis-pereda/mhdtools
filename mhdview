@@ -3,11 +3,11 @@
 import threading
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import click
 
 import mhdtools
-import hradiobutton
 
 
 def format_coord(x, y):
@@ -110,7 +110,8 @@ class MhdView:
 		for worker in workers:
 			worker.start()
 
-		self.fig, self.ax = plt.subplots()
+		self.fig = plt.figure()
+		self.ax = self.fig.add_axes([0.05, 0.15, 0.70, 0.70])
 
 		self.setup_axis()
 
@@ -122,7 +123,9 @@ class MhdView:
 
 		if self.cmap != '':
 			cmappable = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(0, 100), cmap=self.cmap)
-			self.colorbar = self.fig.colorbar(cmappable, ax=self.ax)
+			divider = make_axes_locatable(self.ax)
+			cax = divider.append_axes("right", size="5%", pad=.05)
+			self.colorbar = self.fig.colorbar(cmappable, cax=cax)
 			self.colorbar.ax.set_title('')
 
 		if self.cmap == '':
@@ -175,18 +178,19 @@ class MhdView:
 		self.select_plan(self.default_axis)
 		self.update(self.default_depth)
 
-		plt.title(self.title)
+		self.ax.set_title(self.title)
 		plt.show()
 
 	def save(self, output, dpi=300):
+		self.ax.set_position([.1, .1, .8, .8])
 		self.select_plan(self.default_axis)
 		self.update(self.default_depth)
-		plt.title(self.title)
+		self.ax.set_title(self.title)
 		plt.tight_layout()
 		plt.savefig(output, dpi=dpi)
 
 	def setup_ui(self):
-		ax_depth = self.fig.add_axes([0.2, 0.0, 0.65, 0.05])
+		ax_depth = self.fig.add_axes([0.1, 0.0, 0.80, 0.05])
 		self.slider_depth = mpl.widgets.Slider(
 			ax=ax_depth,
 			label='depth',
@@ -196,11 +200,9 @@ class MhdView:
 			valstep=1
 		)
 
-		ax_plan = self.fig.add_axes([0.20, 0.9, 0.45, 0.06])
+		ax_plan = self.fig.add_axes([0.83, 0.5, 0.15, 0.21])
 		buttons = ('axial', 'sagittal', 'coronal')
-		self.button_select_plan = hradiobutton.HRadioButtons(
-			ax_plan, buttons, size=100, active=buttons.index(self.default_axis)
-		)
+		self.button_select_plan = mpl.widgets.RadioButtons(ax_plan, buttons)
 
 	def close(self):
 		plt.close(self.fig)

@@ -7,7 +7,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import click
 
-import mhdtools
+from mhdtools import common
 
 
 def format_coord(x, y):
@@ -19,7 +19,7 @@ def format_cursor_data(v):
 
 
 def worker_load(mhd, ret):
-	ret['raw'], ret['origin'], ret['spacing'] = mhdtools.load_data(mhd)
+	ret['raw'], ret['origin'], ret['spacing'] = common.load_data(mhd)
 
 
 class MhdView:
@@ -198,7 +198,7 @@ class MhdView:
 			ax=ax_depth,
 			label='depth',
 			valmin=0,
-			valmax=self.raw.shape[mhdtools.to_plan_index[self.default_axis]]-1,
+			valmax=self.raw.shape[common.to_plan_index[self.default_axis]]-1,
 			valinit=self.default_depth,
 			valstep=1
 		)
@@ -214,16 +214,16 @@ class MhdView:
 		plt.close(self.fig)
 
 	def select_plan(self, axis):
-		self.plan = mhdtools.raw_plan(self.raw, axis)
+		self.plan = common.raw_plan(self.raw, axis)
 		if self.step != 1:
 			self.plan = self.plan[:, ::self.step, ::self.step]
 
 		if self.background is not None:
-			self.bg_plan = mhdtools.raw_plan(self.background, axis)
+			self.bg_plan = common.raw_plan(self.background, axis)
 			if self.step != 1:
 				self.bg_plan = self.bg_plan[:, ::self.step, ::self.step]
 
-		lspacing = [x for i, x in enumerate(self.spacing) if i != mhdtools.to_plan_index[axis]]
+		lspacing = [x for i, x in enumerate(self.spacing) if i != common.to_plan_index[axis]]
 		self.extent = [0, self.plan[0].shape[1] * lspacing[0], 0, self.plan[0].shape[0] * lspacing[1]]
 
 		if self.slider_depth is not None:
@@ -234,7 +234,7 @@ class MhdView:
 			)
 
 	def select_plan_peak(self):
-		data = mhdtools.raw_plan(self.raw, self.button_select_plan.value_selected)
+		data = common.raw_plan(self.raw, self.button_select_plan.value_selected)
 		data = np.array([np.max(plan) for plan in data])
 		peaks = data == np.max(data)
 
@@ -300,7 +300,7 @@ class MhdView:
 )
 @click.option('-a', '--alpha', default=.7, help='foreground alpha if background set')
 @click.option('-c', '--cmap', default='', is_flag=False, flag_value='jet', help='foreground colormap')
-@click.option('-x', '--axis', 'default_axis', type=click.Choice(mhdtools.plans), default='axial', help='default axis')
+@click.option('-x', '--axis', 'default_axis', type=click.Choice(common.plans), default='axial', help='default axis')
 @click.option('-d', '--depth', 'default_depth', type=int, default=0, help='default depth')
 @click.option('-N', '--lnormalise', default=False, is_flag=True, help='normalise foreground data for current layer')
 @click.option('-n', '--normalise', default=False, is_flag=True, help='normalise foreground data')

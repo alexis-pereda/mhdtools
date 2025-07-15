@@ -1,14 +1,5 @@
 # A tools collection for MHD/RAW files
 
-## Dependencies
-
-Python packages:
-- `click`
-- `SimpleITK`
-- `scipy`
-- `numpy`
-- `matplotlib`
-
 ## Installation
 
 A python virtual environment is advised:
@@ -17,21 +8,12 @@ A python virtual environment is advised:
 python -m venv mhdtools
 source mhdtools/bin/activate
 pip install -U pip
-pip install click SimpleITK scipy numpy matplotlib
+pip install mhdtools
 ```
 
-## Helper script
+## Available tools
 
-To avoid having to source the python environment manually,
-one can write this helper script:
+### `mhdview`
 
-```sh
-#!/usr/bin/bash
-
-source /path/to/mhdtools/bin/activate
-/path/to/mhdview "$@"
-```
-
-To do:
-- name the script below `mhdview`
-- adapt paths to your installation (env and `mhdview`)
+An MHD/RAW file 2D viewer.
+See `--help` for features and options.
